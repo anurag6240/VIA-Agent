@@ -20,16 +20,18 @@ function App() {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(true);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  const [showDeviceHelp, setShowDeviceHelp] = useState(false);
 
   const {
     isSupported,
     isListening,
     transcript,
-    error,
     startListening,
     stopListening,
     resetTranscript
-  } = useVoiceRecognition();
+  } = useVoiceRecognition(selectedDeviceId);
 
   // Load chat history on mount
   useEffect(() => {
@@ -62,24 +64,6 @@ function App() {
     }
   }, [transcript, isListening]);
 
-  // Handle speech recognition errors and auto-restart
-  useEffect(() => {
-    if (error) {
-      console.log('Speech recognition error:', error);
-      setStatus('error');
-      setStatusMessage('Restarting microphone...');
-      
-      // Auto-restart after error
-      setTimeout(() => {
-        if (autoRestartEnabled && !isProcessing) {
-          startListening();
-          setStatus('idle');
-          setStatusMessage('');
-        }
-      }, 1000);
-    }
-  }, [error, autoRestartEnabled, isProcessing, startListening]);
-
   // Auto-restart microphone after processing is complete
   useEffect(() => {
     if (!isProcessing && !isListening && autoRestartEnabled && isSupported) {
@@ -99,6 +83,16 @@ function App() {
       setStatus('idle');
     }
   }, [isListening, isProcessing]);
+
+  // Fetch audio input devices
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
+      });
+    });
+  }, []);
 
   const handleTranscript = async (text: string) => {
     const cleanedQuestion = cleanQuestion(text);
@@ -182,23 +176,47 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Fixed Header */}
+      <header className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between fixed top-0 left-0 right-0 z-30 shadow-sm" style={{height:'56px'}}>
         <div className="flex items-center gap-3">
-          <VoiceButton
-            isListening={isListening}
-            isProcessing={isProcessing}
-            onClick={handleVoiceButtonClick}
-            disabled={!isSupported}
-            autoRestartEnabled={autoRestartEnabled}
-          />
-          <div>
-            <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">VIA</h1>
-            <div className="hidden sm:block">
-              <StatusIndicator status={status} message={statusMessage} />
-            </div>
+          {/* Hide mic button in header on mobile, show on desktop */}
+          <div className="hidden sm:block">
+            <VoiceButton
+              isListening={isListening}
+              isProcessing={isProcessing}
+              onClick={handleVoiceButtonClick}
+              disabled={!isSupported}
+              autoRestartEnabled={autoRestartEnabled}
+            />
           </div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">VIA</h1>
+            {/* Device selection dropdown: always visible, styled for mobile */}
+            {audioDevices.length > 1 && (
+              <select
+                className="border rounded px-1 py-1 text-xs max-w-[90px] sm:max-w-xs focus:outline-none"
+                value={selectedDeviceId || ''}
+                onChange={e => setSelectedDeviceId(e.target.value)}
+                title="Select microphone device"
+                style={{fontSize:'12px'}}
+              >
+                <option value="">Default Mic</option>
+                {audioDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Mic ${d.deviceId.slice(-4)}`}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-xs underline text-blue-500 hover:text-blue-700"
+            onClick={() => setShowDeviceHelp(v => !v)}
+            title="Help with Bluetooth and mic selection"
+          >
+            Mic Help
+          </button>
         </div>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
@@ -212,9 +230,21 @@ function App() {
           )}
         </div>
       </header>
+      {/* Device help tooltip */}
+      {showDeviceHelp && (
+        <div className="absolute top-14 right-2 bg-white border border-gray-200 rounded shadow-lg p-3 text-xs z-30 max-w-xs">
+          <b>Bluetooth/External Mic Tips:</b>
+          <ul className="list-disc ml-4 mt-1">
+            <li>Connect your Bluetooth or external mic before opening this app.</li>
+            <li>If your mic doesn't appear, refresh the page after connecting.</li>
+            <li>On mobile, browser support for device selection may be limited.</li>
+            <li>Some browsers may still use the default mic for speech recognition.</li>
+          </ul>
+        </div>
+      )}
 
-      {/* Chat Messages */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Chat Area (fills between header and footer) */}
+      <main className="flex-1 flex flex-col overflow-hidden pt-[56px] pb-[48px]">
         <ChatContainer messages={messages} />
         {isProcessing && (
           <div className="flex justify-end px-6 py-2">
@@ -226,16 +256,26 @@ function App() {
             </div>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Helper Text */}
-      {!isListening && !isProcessing && (
-        <div className="px-4 pb-3 sm:pb-0 mt-2 sm:mt-0">
-          <p className="text-center text-xs text-gray-400">
-            {autoRestartEnabled ? 'Microphone is always listening for questions' : 'Tap microphone to enable auto-listening'}
-          </p>
-        </div>
-      )}
+      {/* Fixed Footer for Helper Text */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-30" style={{height:'48px'}}>
+        <p className="text-center text-xs text-gray-400 m-0">
+          {isProcessing ? 'Processing...' :
+            (autoRestartEnabled ? 'Microphone is always listening for questions' : 'Tap microphone to enable auto-listening')}
+        </p>
+      </footer>
+
+      {/* Floating mic button for mobile */}
+      <div className="sm:hidden fixed bottom-16 right-4 z-40">
+        <VoiceButton
+          isListening={isListening}
+          isProcessing={isProcessing}
+          onClick={handleVoiceButtonClick}
+          disabled={!isSupported}
+          autoRestartEnabled={autoRestartEnabled}
+        />
+      </div>
     </div>
   );
 }

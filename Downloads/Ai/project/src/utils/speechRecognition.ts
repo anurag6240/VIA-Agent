@@ -4,9 +4,9 @@ export const isSpeechRecognitionSupported = (): boolean => {
   return 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
 };
 
-export const createSpeechRecognition = (): SpeechRecognition | null => {
+export const createSpeechRecognition = async (deviceId?: string): Promise<{ recognition: SpeechRecognition | null, stream?: MediaStream }> => {
   if (!isSpeechRecognitionSupported()) {
-    return null;
+    return { recognition: null };
   }
 
   const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -14,10 +14,20 @@ export const createSpeechRecognition = (): SpeechRecognition | null => {
   
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = 'en-US';
+  recognition.lang = 'en-IN';
   recognition.maxAlternatives = 1;
 
-  return recognition;
+  let stream: MediaStream | undefined = undefined;
+  if (deviceId) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+      // Note: Web Speech API does not allow us to directly set the input stream, but requesting getUserMedia may help browsers pick the right device.
+    } catch (e) {
+      // fallback: ignore error, use default mic
+    }
+  }
+
+  return { recognition, stream };
 };
 
 export const startListening = (

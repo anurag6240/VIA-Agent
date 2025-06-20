@@ -20,7 +20,6 @@ export const generateAnswer = async (question: string): Promise<string> => {
   }
 
   const prompt = `You're a senior full-stack developer. Answer only from inside the box.
-
 Format your answer in markdown, with these sections:
 
 ---
@@ -77,39 +76,37 @@ Interview Question: "${question}"`;
       throw new Error('No valid response received from Gemini API');
     }
 
-    const rawAnswer = data.candidates[0].content.parts[0].text.trim();
+    let cleanedAnswer = data.candidates[0].content.parts[0].text.trim();
 
-    // Clean and format output
-    let cleanedAnswer = rawAnswer;
+    // Normalize line endings
+    cleanedAnswer = cleanedAnswer.replace(/\r\n/g, '\n');
 
-    // Collapse 3+ newlines to 2
-    cleanedAnswer = cleanedAnswer.replace(/\n{3,}/g, '\n\n');
+    // Trim trailing spaces on each line
+    cleanedAnswer = cleanedAnswer
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .join('\n');
 
-    // Trim extra spaces per line
-    cleanedAnswer = cleanedAnswer.replace(/^\s+|\s+$/gm, '');
-
-    // Ensure 1 blank line after Overview section
+    // Ensure 1 blank line after Overview
     cleanedAnswer = cleanedAnswer.replace(
       /(\*\*?📝 Overview\*\*?\n[\s\S]*?)(?=\n\*\*?✅ Advantages\*\*?)/,
       (_, p1) => p1.trimEnd() + '\n\n'
     );
 
-    // Remove extra newlines after section headers
-    cleanedAnswer = cleanedAnswer.replace(/(\*\*?[✅❌][^\n]+\*\*?)\n{2,}/g, '$1\n');
-
-    // Ensure 1 blank line between Advantages and Disadvantages
+    // Ensure 1 blank line after Advantages
     cleanedAnswer = cleanedAnswer.replace(
-      /(\*\*✅ Advantages\*\*\n(?:[-*].+\n?)+)\n+(\*\*❌ Disadvantages\*\*)/,
-      (_, advBlock, disHeader) => advBlock.trimEnd() + '\n\n' + disHeader
+      /(\*\*?✅ Advantages\*\*?\n(?:[-*].+\n?)+)(?=\s*\*\*?❌ Disadvantages\*\*?)/,
+      (_, p1) => p1.trimEnd() + '\n\n'
     );
 
-    // Remove wrapping code blocks if present
+    // Remove multiple newlines
+    cleanedAnswer = cleanedAnswer.replace(/\n{3,}/g, '\n\n');
+
+    // Remove code block wrappers
     cleanedAnswer = cleanedAnswer.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
 
-    // Trim trailing newlines
-    cleanedAnswer = cleanedAnswer.replace(/(\n\s*)+$/, '');
-
-    return cleanedAnswer;
+    // Final trim
+    return cleanedAnswer.trim();
   } catch (error) {
     console.error('Gemini API error:', error);
     throw new Error('Failed to generate answer. Please try again.');

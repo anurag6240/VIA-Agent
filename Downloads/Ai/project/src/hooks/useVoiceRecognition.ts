@@ -12,56 +12,96 @@ export interface UseVoiceRecognitionReturn {
   resetTranscript: () => void;
 }
 
-export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
+export const useVoiceRecognition = (selectedDeviceId?: string): UseVoiceRecognitionReturn => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const deviceIdRef = useRef<string | undefined>(undefined);
+  const isListeningRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const isSupported = isSpeechRecognitionSupported();
 
-  // Always start mic on mount and keep it running
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    let cleanupStream: (() => void) | null = null;
+    let cleanupRecognition: (() => void) | null = null;
+    // Only recreate if deviceId actually changes
     if (!isSupported) return;
-    if (!recognitionRef.current) {
-      recognitionRef.current = createSpeechRecognition();
+    if (deviceIdRef.current === selectedDeviceId && recognitionRef.current) {
+      // No change, do nothing
+      return;
     }
-    const recognition = recognitionRef.current;
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => {
-      setIsListening(false);
-      // Always restart
-      try {
-        recognition.start();
-      } catch (e) {}
-    };
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
+    deviceIdRef.current = selectedDeviceId;
+    (async () => {
+      // Clean up previous recognition and stream
+      if (recognitionRef.current) {
+        try { recognitionRef.current.onstart = null; recognitionRef.current.onend = null; recognitionRef.current.onresult = null; recognitionRef.current.onerror = null; recognitionRef.current.stop(); } catch (e) {}
       }
-      const correctedTranscript = autoCorrectText(finalTranscript + interimTranscript);
-      setTranscript(correctedTranscript);
-    };
-    recognition.onerror = () => {
-      // Always restart
-      try {
-        recognition.start();
-      } catch (e) {}
-    };
-    try {
-      recognition.start();
-    } catch (e) {}
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      const { recognition, stream } = await createSpeechRecognition(selectedDeviceId);
+      recognitionRef.current = recognition;
+      if (stream) {
+        streamRef.current = stream;
+        cleanupStream = () => {
+          stream.getTracks().forEach(track => track.stop());
+        };
+      }
+      if (!recognition) return;
+      isListeningRef.current = false;
+      recognition.onstart = () => { if (isMountedRef.current) { setIsListening(true); isListeningRef.current = true; } };
+      recognition.onend = () => {
+        if (isMountedRef.current) { setIsListening(false); isListeningRef.current = false; }
+        // Always restart if not unmounted
+        if (isMountedRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {}
+        }
+      };
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        const correctedTranscript = autoCorrectText(finalTranscript + interimTranscript);
+        if (isMountedRef.current) setTranscript(correctedTranscript);
+      };
+      recognition.onerror = () => {
+        // Always restart if not unmounted
+        if (isMountedRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {}
+        }
+      };
+      // Only start if not already listening
+      if (!isListeningRef.current) {
+        try {
+          recognition.start();
+        } catch (e) {}
+      }
+    })();
     return () => {
-      try {
-        recognition.stop();
-      } catch (e) {}
+      if (cleanupStream) cleanupStream();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.onstart = null; recognitionRef.current.onend = null; recognitionRef.current.onresult = null; recognitionRef.current.onerror = null; recognitionRef.current.stop(); } catch (e) {}
+      }
     };
-  }, [isSupported]);
+  }, [isSupported, selectedDeviceId]);
 
   const startListening = () => {
     if (recognitionRef.current) {

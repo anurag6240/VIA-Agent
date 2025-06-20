@@ -1,5 +1,4 @@
 import stringSimilarity from 'string-similarity';
-import { doubleMetaphone } from 'double-metaphone';
 
 const INTERVIEW_KEYWORDS = [
   // Question triggers
@@ -188,19 +187,6 @@ export const cleanQuestion = (text: string): string => {
 
 export function autoCorrectText(text: string): string {
   return text.split(/\s+/).map(word => {
-    // 1. Try phonetic match
-    const wordPhonetic = doubleMetaphone(word)[0];
-    let bestPhoneticKeyword = '';
-    for (const keyword of INTERVIEW_KEYWORDS) {
-      if (doubleMetaphone(keyword)[0] === wordPhonetic) {
-        bestPhoneticKeyword = keyword;
-        break;
-      }
-    }
-    if (bestPhoneticKeyword) {
-      return bestPhoneticKeyword;
-    }
-    // 2. Fallback to string similarity
     const { bestMatch } = stringSimilarity.findBestMatch(word, INTERVIEW_KEYWORDS);
     return bestMatch.rating > 0.7 ? bestMatch.target : word;
   }).join(' ');

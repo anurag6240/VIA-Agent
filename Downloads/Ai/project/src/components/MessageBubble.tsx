@@ -29,13 +29,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         ) : (
           <ReactMarkdown
             components={{
-              h1: ({node, ...props}) => <h1 className="font-bold text-lg mb-0 mt-0 leading-tight" {...props} />,
-              h2: ({node, ...props}) => <h2 className="font-semibold text-base mb-0 mt-0 leading-tight" {...props} />,
-              ul: ({node, ...props}) => <ul className="list-disc ml-4 my-0 space-y-0" {...props} />,
-              ol: ({node, ...props}) => <ol className="list-decimal ml-4 my-0 space-y-0" {...props} />,
-              li: ({node, ...props}) => <li className="mb-0 leading-tight" {...props} />,
+              h1: ({node, ...props}) => <h1 className="font-bold text-lg mt-1 mb-1" {...props} />,
+              h2: ({node, ...props}) => <h2 className="font-semibold text-base mt-1 mb-1" {...props} />,
+              ul: ({node, ...props}) => <ul className="list-disc ml-4 sm:ml-5 my-1 space-y-0.5" {...props} />,
+              ol: ({node, ...props}) => <ol className="list-decimal ml-4 sm:ml-5 my-1 space-y-0.5" {...props} />,
+              li: ({node, ...props}) => <li className="mb-0.5 leading-snug" {...props} />,
               strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
-              p: ({node, ...props}) => <p className="mb-0 leading-tight" {...props} />,
+              p: ({node, ...props}) => <p className="mb-1 leading-snug" {...props} />,
               code: ({node, ...props}) => <code className="bg-gray-800 text-xs px-1 py-0.5 rounded break-all" {...props} />,
               em: ({node, ...props}) => <em className="italic" {...props} />,
               br: () => <br />,
