@@ -2,9 +2,6 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_API_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent';
 
-import stringSimilarity from 'string-similarity';
-import { INTERVIEW_KEYWORDS } from './questionDetection';
-
 export interface GeminiResponse {
   candidates: Array<{
     content: {
@@ -85,32 +82,32 @@ Interview Question: "${question}"`;
     // Clean and format output
     let cleanedAnswer = rawAnswer;
 
-    // Collapse multiple newlines
+    // Collapse 3+ newlines to 2
     cleanedAnswer = cleanedAnswer.replace(/\n{3,}/g, '\n\n');
 
-    // Trim extra spaces
+    // Trim extra spaces per line
     cleanedAnswer = cleanedAnswer.replace(/^\s+|\s+$/gm, '');
 
-    // Ensure 1 blank line after Overview content
+    // Ensure 1 blank line after Overview section
     cleanedAnswer = cleanedAnswer.replace(
       /(\*\*?📝 Overview\*\*?\n[\s\S]*?)(?=\n\*\*?✅ Advantages\*\*?)/,
-      (match, p1) => p1.trimEnd() + '\n\n'
+      (_, p1) => p1.trimEnd() + '\n\n'
     );
 
-    // Remove extra newlines after section headings
+    // Remove extra newlines after section headers
     cleanedAnswer = cleanedAnswer.replace(/(\*\*?[✅❌][^\n]+\*\*?)\n{2,}/g, '$1\n');
 
-    // Ensure exactly one blank line between advantages and disadvantages
+    // Ensure 1 blank line between Advantages and Disadvantages
     cleanedAnswer = cleanedAnswer.replace(
       /(\*\*✅ Advantages\*\*\n(?:[-*].+\n?)+)\n+(\*\*❌ Disadvantages\*\*)/,
       (_, advBlock, disHeader) => advBlock.trimEnd() + '\n\n' + disHeader
     );
 
+    // Remove wrapping code blocks if present
+    cleanedAnswer = cleanedAnswer.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
+
     // Trim trailing newlines
     cleanedAnswer = cleanedAnswer.replace(/(\n\s*)+$/, '');
-
-    // Remove leading and trailing code block markers if present
-    cleanedAnswer = cleanedAnswer.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
 
     return cleanedAnswer;
   } catch (error) {
